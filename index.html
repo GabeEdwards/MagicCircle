@@ -29,6 +29,15 @@
         <button id="new-game-button" class="button button-primary" type="button">New game</button>
       </div>
       <div id="history-list" class="history-list"></div>
+      <section class="player-results-section" aria-labelledby="player-results-heading">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">Session totals</p>
+            <h2 id="player-results-heading">Player results</h2>
+          </div>
+        </div>
+        <div id="player-results" class="player-results"></div>
+      </section>
     </section>
 
     <section id="setup-view" class="view" aria-labelledby="setup-heading" hidden>
@@ -43,11 +52,11 @@
       <div id="setup-errors" class="inline-error" role="alert" hidden></div>
       <div class="team-setup-grid">
         <fieldset class="team-setup" data-team="a">
-          <legend>Team North <span id="team-a-count">0 / 2-4</span></legend>
+          <legend>Team Blue <span id="team-a-count">0 / 2-4</span></legend>
           <div id="team-a-players" class="player-grid"></div>
         </fieldset>
         <fieldset class="team-setup" data-team="b">
-          <legend>Team South <span id="team-b-count">0 / 2-4</span></legend>
+          <legend>Team Green <span id="team-b-count">0 / 2-4</span></legend>
           <div id="team-b-players" class="player-grid"></div>
         </fieldset>
       </div>
@@ -64,7 +73,7 @@
         </div>
         <div class="turn-status">
           <span class="status-dot" aria-hidden="true"></span>
-          <span id="active-team-label">Team North starts</span>
+          <span id="active-team-label">Team Blue starts</span>
         </div>
       </div>
       <div id="game-teams" class="game-team-grid"></div>

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateTeams, createActiveGame, adjustLife, advanceTurn } = require('../app.js');
+const { validateTeams, sortedMembers, playerResults, createActiveGame, adjustLife, advanceTurn } = require('../app.js');
 
 const teams = [
   { id: 'a', members: ['Gabe', 'Phil'] },
@@ -31,4 +31,24 @@ test('uses fallback randomness when secure randomness is unavailable', () => {
   const game = createActiveGame(teams, null);
   assert.equal(typeof game.firstPlayerTeamId, 'string');
   assert.equal(game.usedRandomFallback, true);
+});
+
+test('sorts roster names and supports five-point life changes', () => {
+  assert.deepEqual(sortedMembers(['Tung', 'Anthony', 'gabe']), ['Anthony', 'gabe', 'Tung']);
+  const game = createActiveGame(teams, null);
+  assert.equal(adjustLife(game, 'a', 5).lifeTotals.a, 45);
+  assert.equal(adjustLife(game, 'b', -5).lifeTotals.b, 35);
+});
+
+test('derives alphabetized player results from completed games', () => {
+  const games = [
+    { teams, winnerTeamId: 'a' },
+    { teams, winnerTeamId: 'b' }
+  ];
+  assert.deepEqual(playerResults(games), [
+    { playerName: 'Gabe', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 },
+    { playerName: 'Phil', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 },
+    { playerName: 'Siu', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 },
+    { playerName: 'Tung', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 }
+  ]);
 });

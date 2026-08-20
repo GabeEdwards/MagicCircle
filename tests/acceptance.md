@@ -11,9 +11,17 @@
 - [x] New game abandonment requires confirmation and preserves completed history by guarded UI flow.
 - [x] Portrait and landscape tablet layouts keep values and controls visible.
 - [x] Loaded app continues tracking without network access when opened from the static file.
+- [x] Setup identifies the teams as Team Blue and Team Green with matching visual treatments.
+- [x] Setup sorts player names alphabetically and disables selected players in the opposing team.
+- [x] Active games highlight the active team and provide -5, -1, +1, and +5 controls.
+- [x] Between-games view shows alphabetized player games, wins, losses, and one-decimal win percentages.
+- [x] Every app view and state uses dark surfaces with readable text and controls.
+- [x] Team Blue and Team Green use distinct dark shades in setup, game, and history displays.
+- [x] Active-team emphasis remains visible over team shading and does not rely on color alone.
+- [x] Focused, disabled, selected, error, and forced-contrast states remain usable on dark surfaces.
 
 ## Validation Notes
 
 - Browser acceptance checks passed on 2026-08-20 at desktop and tablet-sized viewports.
 - Node.js and Python are unavailable in the current environment, so the Node test files
-	were not executed and a local HTTP server could not be started.
+  were not executed and a local HTTP server could not be started.

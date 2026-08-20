@@ -3,7 +3,8 @@
 
   const PLAYERS = ['Gabe', 'Phil', 'Tung', 'Siu', 'Anthony', 'Chris', 'Kate'];
   const STORAGE_KEY = 'magic-circle-state-v1';
-  const TEAM_NAMES = { a: 'Team North', b: 'Team South' };
+  const TEAM_NAMES = { a: 'Team Blue', b: 'Team Green' };
+  const TEAM_COLORS = { a: 'blue', b: 'green' };
 
   const emptyState = () => ({
     activeGame: null,
@@ -13,6 +14,27 @@
 
   function teamNames(teams) {
     return teams.reduce((names, team) => ({ ...names, [team.id]: TEAM_NAMES[team.id] || team.id }), {});
+  }
+
+  function sortedMembers(members) {
+    return [...members].sort((first, second) => first.localeCompare(second, undefined, { sensitivity: 'base' }));
+  }
+
+  function playerResults(completedGames) {
+    const results = new Map();
+    completedGames.forEach((game) => {
+      game.teams.forEach((team) => {
+        team.members.forEach((player) => {
+          const result = results.get(player) || { playerName: player, gamesPlayed: 0, wins: 0, losses: 0, winPercentage: 0 };
+          result.gamesPlayed += 1;
+          if (team.id === game.winnerTeamId) result.wins += 1;
+          else result.losses += 1;
+          result.winPercentage = Number(((result.wins / result.gamesPlayed) * 100).toFixed(1));
+          results.set(player, result);
+        });
+      });
+    });
+    return sortedMembers([...results.keys()]).map((player) => results.get(player));
   }
 
   function validateTeams(teams) {
@@ -60,7 +82,7 @@
   }
 
   function adjustLife(game, teamId, delta) {
-    if (!game || game.status !== 'active' || !['a', 'b'].includes(teamId) || ![1, -1].includes(delta)) return game;
+    if (!game || game.status !== 'active' || !['a', 'b'].includes(teamId) || ![1, -1, 5, -5].includes(delta)) return game;
     return { ...game, lifeTotals: { ...game.lifeTotals, [teamId]: game.lifeTotals[teamId] + delta } };
   }
 
@@ -113,7 +135,7 @@
     }
   }
 
-  const api = { PLAYERS, TEAM_NAMES, validateTeams, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, createCompletedGame, emptyState, isValidState, readState, writeState };
+  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, validateTeams, sortedMembers, playerResults, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, createCompletedGame, emptyState, isValidState, readState, writeState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.MTGTracker = api;
   if (typeof document === 'undefined') return;
@@ -122,6 +144,7 @@
     modeLabel: document.querySelector('#mode-label'),
     status: document.querySelector('#status-message'),
     history: document.querySelector('#history-list'),
+    playerResults: document.querySelector('#player-results'),
     setupErrors: document.querySelector('#setup-errors'),
     confirmSetup: document.querySelector('#confirm-setup-button'),
     gameTeams: document.querySelector('#game-teams'),
@@ -164,11 +187,13 @@
       const container = document.querySelector(`#team-${team.id}-players`);
       const count = document.querySelector(`#team-${team.id}-count`);
       count.textContent = `${team.members.length} / 2-4`;
-      container.replaceChildren(...PLAYERS.map((player) => {
+      const opposingTeam = setupTeams.find((item) => item.id !== team.id);
+      container.replaceChildren(...sortedMembers(PLAYERS).map((player) => {
         const wrapper = document.createElement('div');
         wrapper.className = 'player-choice';
         const input = document.createElement('input');
         input.type = 'checkbox'; input.id = `team-${team.id}-${player}`; input.checked = team.members.includes(player); input.dataset.team = team.id; input.dataset.player = player;
+        input.disabled = opposingTeam.members.includes(player);
         const label = document.createElement('label'); label.htmlFor = input.id; label.textContent = player;
         wrapper.append(input, label); return wrapper;
       }));
@@ -182,6 +207,7 @@
   function renderHistory() {
     if (!state.completedGames.length) {
       elements.history.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty-state', textContent: 'No completed games yet. Set up the first match when your teams are ready.' }));
+      elements.playerResults.replaceChildren(Object.assign(document.createElement('p'), { className: 'player-results-empty', textContent: 'No player results yet.' }));
       return;
     }
     elements.history.replaceChildren(...state.completedGames.map((result, index) => {
@@ -192,13 +218,29 @@
       header.append(title, meta);
       const teams = document.createElement('div'); teams.className = 'history-teams';
       result.teams.forEach((team) => {
-        const item = document.createElement('div'); item.className = `history-team${team.id === result.winnerTeamId ? ' winner' : ''}`;
+        const item = document.createElement('div'); item.className = `history-team${team.id === result.winnerTeamId ? ' winner' : ''}`; item.dataset.team = team.id;
         const label = document.createElement('strong'); label.textContent = `${TEAM_NAMES[team.id]}${team.id === result.winnerTeamId ? ' · Winner' : ''}`;
-        const members = document.createElement('span'); members.textContent = `${team.members.join(', ')} · ${result.finalLifeTotals[team.id]} life`;
+        const members = document.createElement('span'); members.textContent = `${sortedMembers(team.members).join(', ')} · ${result.finalLifeTotals[team.id]} life`;
         item.append(label, members); teams.append(item);
       });
       card.append(header, teams); return card;
     }));
+    const results = playerResults(state.completedGames);
+    if (!results.length) {
+      elements.playerResults.replaceChildren(Object.assign(document.createElement('p'), { className: 'player-results-empty', textContent: 'No player results yet.' }));
+      return;
+    }
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th scope="col">Player</th><th scope="col">Games</th><th scope="col">Wins</th><th scope="col">Losses</th><th scope="col">Win %</th></tr></thead>';
+    const body = document.createElement('tbody');
+    results.forEach((result) => {
+      const row = document.createElement('tr');
+      [result.playerName, result.gamesPlayed, result.wins, result.losses, `${result.winPercentage.toFixed(1)}%`].forEach((value) => {
+        const cell = document.createElement('td'); cell.textContent = value; row.append(cell);
+      });
+      body.append(row);
+    });
+    table.append(body); elements.playerResults.replaceChildren(table);
   }
 
   function renderGame() {
@@ -211,10 +253,11 @@
       const title = document.createElement('div'); const heading = document.createElement('h3'); heading.textContent = TEAM_NAMES[team.id];
       const first = document.createElement('span'); first.className = 'first-player'; first.textContent = team.id === game.firstPlayerTeamId ? 'First player' : '';
       title.append(heading, first); label.append(title);
-      const members = document.createElement('ul'); members.className = 'members'; team.members.forEach((member) => { const li = document.createElement('li'); li.textContent = member; members.append(li); });
+      card.dataset.active = String(team.id === game.activeTeamId); card.dataset.color = TEAM_COLORS[team.id];
+      const members = document.createElement('ul'); members.className = 'members'; sortedMembers(team.members).forEach((member) => { const li = document.createElement('li'); li.textContent = member; members.append(li); });
       const life = document.createElement('div'); life.className = 'life-total'; life.textContent = game.lifeTotals[team.id]; life.setAttribute('aria-label', `${TEAM_NAMES[team.id]} life total ${game.lifeTotals[team.id]}`);
       const controls = document.createElement('div'); controls.className = 'life-controls';
-      [-1, 1].forEach((delta) => { const button = document.createElement('button'); button.className = 'life-button'; button.type = 'button'; button.dataset.action = 'life'; button.dataset.team = team.id; button.dataset.delta = delta; button.textContent = delta > 0 ? '+' : '−'; button.setAttribute('aria-label', `${delta > 0 ? 'Increase' : 'Decrease'} ${TEAM_NAMES[team.id]} life`); controls.append(button); });
+      [-5, -1, 1, 5].forEach((delta) => { const button = document.createElement('button'); button.className = 'life-button'; button.type = 'button'; button.dataset.action = 'life'; button.dataset.team = team.id; button.dataset.delta = delta; button.textContent = `${delta > 0 ? '+' : '−'}${Math.abs(delta)}`; button.setAttribute('aria-label', `${delta > 0 ? 'Increase' : 'Decrease'} ${TEAM_NAMES[team.id]} life by ${Math.abs(delta)}`); controls.append(button); });
       card.append(label, members, life, controls); return card;
     }));
   }
