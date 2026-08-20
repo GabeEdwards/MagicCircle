@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17324d">
+  <meta name="description" content="A local two-team Magic: The Gathering life tracker.">
+  <title>Magic Circle</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app" aria-live="polite">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Magic: The Gathering</p>
+        <h1>Magic Circle</h1>
+      </div>
+      <p id="mode-label" class="mode-label">Between games</p>
+    </header>
+
+    <p id="status-message" class="status-message" role="status" hidden></p>
+
+    <section id="between-games-view" class="view" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">The table is ready</p>
+          <h2 id="history-heading">Recent games</h2>
+        </div>
+        <button id="new-game-button" class="button button-primary" type="button">New game</button>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+    <section id="setup-view" class="view" aria-labelledby="setup-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Before the shuffle</p>
+          <h2 id="setup-heading">Choose your teams</h2>
+        </div>
+        <button id="cancel-setup-button" class="button button-quiet" type="button">Cancel</button>
+      </div>
+      <p class="helper-text">Choose 2 to 4 players for each team. A player can only be on one team.</p>
+      <div id="setup-errors" class="inline-error" role="alert" hidden></div>
+      <div class="team-setup-grid">
+        <fieldset class="team-setup" data-team="a">
+          <legend>Team North <span id="team-a-count">0 / 2-4</span></legend>
+          <div id="team-a-players" class="player-grid"></div>
+        </fieldset>
+        <fieldset class="team-setup" data-team="b">
+          <legend>Team South <span id="team-b-count">0 / 2-4</span></legend>
+          <div id="team-b-players" class="player-grid"></div>
+        </fieldset>
+      </div>
+      <div class="action-row">
+        <button id="confirm-setup-button" class="button button-primary" type="button">Start game</button>
+      </div>
+    </section>
+
+    <section id="in-game-view" class="view" aria-labelledby="game-heading" hidden>
+      <div class="game-topbar">
+        <div>
+          <p class="eyebrow">Live game</p>
+          <h2 id="game-heading">Turn <span id="turn-number">1</span></h2>
+        </div>
+        <div class="turn-status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="active-team-label">Team North starts</span>
+        </div>
+      </div>
+      <div id="game-teams" class="game-team-grid"></div>
+      <div class="game-actions">
+        <button id="advance-turn-button" class="button button-primary" type="button">Next turn</button>
+        <button id="end-game-button" class="button button-secondary" type="button">End game</button>
+        <button id="abandon-game-button" class="button button-quiet" type="button">New game</button>
+      </div>
+    </section>
+
+    <section id="end-game-view" class="view modal-view" aria-labelledby="end-game-heading" hidden>
+      <div class="modal-panel">
+        <p class="eyebrow">Game result</p>
+        <h2 id="end-game-heading">Who won?</h2>
+        <p class="helper-text">Choose a winner to save this game to recent results.</p>
+        <div id="winner-options" class="winner-options"></div>
+        <div class="action-row">
+          <button id="cancel-end-button" class="button button-quiet" type="button">Keep playing</button>
+          <button id="confirm-end-button" class="button button-primary" type="button" disabled>Save result</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>
