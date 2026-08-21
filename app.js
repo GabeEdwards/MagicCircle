@@ -37,6 +37,16 @@
     return sortedMembers([...results.keys()]).map((player) => results.get(player));
   }
 
+  function defaultWinner(lifeTotals) {
+    if (lifeTotals.a > lifeTotals.b) return 'a';
+    if (lifeTotals.b > lifeTotals.a) return 'b';
+    return '';
+  }
+
+  function resetState() {
+    return emptyState();
+  }
+
   function validateTeams(teams) {
     const errors = [];
     if (!Array.isArray(teams) || teams.length !== 2) return ['Exactly two teams are required.'];
@@ -135,7 +145,7 @@
     }
   }
 
-  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, validateTeams, sortedMembers, playerResults, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, createCompletedGame, emptyState, isValidState, readState, writeState };
+  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, validateTeams, sortedMembers, playerResults, defaultWinner, resetState, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, createCompletedGame, emptyState, isValidState, readState, writeState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.MTGTracker = api;
   if (typeof document === 'undefined') return;
@@ -294,6 +304,18 @@
 
   document.addEventListener('click', (event) => {
     const action = event.target.dataset.action;
+    if (event.target.id === 'new-session-button') {
+      const hasData = Boolean(state.activeGame || state.completedGames.length);
+      const message = 'Start a new session? This will erase the active game, completed game history, and player results.';
+      if (hasData && !window.confirm(message)) return;
+      state = resetState();
+      setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }];
+      selectedWinner = '';
+      persist();
+      showStatus('');
+      setMode('between');
+      return;
+    }
     if (event.target.id === 'new-game-button' || event.target.id === 'abandon-game-button') {
       if (state.activeGame && !window.confirm('Abandon the active game and start a new one?')) return;
       setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; setMode('setup'); return;
@@ -311,7 +333,7 @@
     }
     if (action === 'life') { state.activeGame = adjustLife(state.activeGame, event.target.dataset.team, Number(event.target.dataset.delta)); persist(); renderGame(); return; }
     if (event.target.id === 'advance-turn-button') { state.activeGame = advanceTurn(state.activeGame); persist(); renderGame(); return; }
-    if (event.target.id === 'end-game-button') { selectedWinner = ''; setMode('end'); return; }
+    if (event.target.id === 'end-game-button') { selectedWinner = defaultWinner(state.activeGame.lifeTotals); setMode('end'); return; }
     if (event.target.id === 'cancel-end-button') { selectedWinner = ''; setMode('game'); return; }
     if (event.target.id === 'confirm-end-button' && selectedWinner) {
       const result = createCompletedGame(state.activeGame, selectedWinner);

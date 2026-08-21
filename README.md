@@ -26,3 +26,7 @@ completed games.
 
 The default presentation is a dark theme with distinct dark blue and dark green team
 surfaces. Existing game state and local history are unchanged by the visual theme.
+
+Use **New session** between play sessions to erase this app's active game, game history,
+and player results after confirmation. On the End game screen, the team with the higher
+life total is selected by default; tied totals require an explicit winner choice.
