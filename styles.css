@@ -45,6 +45,7 @@ h2 { margin-bottom: 0; font-size: clamp(1.7rem, 4vw, 2.8rem); line-height: 1; }
 .button { min-height: 48px; padding: 11px 18px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font: 700 .92rem/1 Arial, sans-serif; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
 .button:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(16, 37, 54, .12); }
 .button-primary { background: var(--ink); color: #0b1118; }
+.button-danger { border-color: #ff7d91; background: transparent; color: #ffb7c4; }
 .button-secondary { border-color: var(--ink); background: transparent; color: var(--ink); }
 .button-quiet { border-color: var(--line); background: transparent; color: var(--muted); }
 .button:disabled { cursor: not-allowed; opacity: .45; transform: none; box-shadow: none; }
@@ -86,6 +87,7 @@ h2 { margin-bottom: 0; font-size: clamp(1.7rem, 4vw, 2.8rem); line-height: 1; }
 .player-choice input:disabled + label { cursor: not-allowed; opacity: .38; filter: grayscale(1); }
 .player-choice input:focus-visible + label { outline: 3px solid var(--gold); outline-offset: 2px; }
 .action-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.session-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 
 .game-topbar { align-items: end; margin-bottom: 24px; }
 .turn-status { display: flex; align-items: center; gap: 9px; color: var(--muted); font: 700 .85rem/1.2 Arial, sans-serif; text-align: right; }

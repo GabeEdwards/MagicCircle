@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateTeams, sortedMembers, playerResults, createActiveGame, adjustLife, advanceTurn } = require('../app.js');
+const { validateTeams, sortedMembers, playerResults, defaultWinner, resetState, createActiveGame, adjustLife, advanceTurn } = require('../app.js');
 
 const teams = [
   { id: 'a', members: ['Gabe', 'Phil'] },
@@ -51,4 +51,14 @@ test('derives alphabetized player results from completed games', () => {
     { playerName: 'Siu', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 },
     { playerName: 'Tung', gamesPlayed: 2, wins: 1, losses: 1, winPercentage: 50 }
   ]);
+});
+
+test('selects the higher-life team and leaves ties unselected', () => {
+  assert.equal(defaultWinner({ a: 45, b: 40 }), 'a');
+  assert.equal(defaultWinner({ a: -5, b: 2 }), 'b');
+  assert.equal(defaultWinner({ a: 40, b: 40 }), '');
+});
+
+test('creates a clean session without changing the envelope shape', () => {
+  assert.deepEqual(resetState(), { activeGame: null, completedGames: [], schemaVersion: 1 });
 });
