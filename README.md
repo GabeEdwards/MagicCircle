@@ -22,7 +22,20 @@ by the device owner.
 
 The tracker uses fixed Team Blue and Team Green identities, alphabetized rosters,
 one-point and five-point life controls, and a derived player-results table based on
-completed games.
+completed games. It also provides fair first-player selection for uneven teams, a
+stable first-player-left game layout, turn undo, optional turn-advance audio, team
+chess clocks, sortable player statistics, CSV export, and an in-game audit log.
+
+## Verify gameplay enhancements
+
+Run the automated logic checks with:
+
+```powershell
+node --test tests/*.test.js
+```
+
+For the browser and iPad validation scenarios, see
+[specs/004-gameplay-enhancements/quickstart.md](specs/004-gameplay-enhancements/quickstart.md).
 
 The default presentation is a dark theme with distinct dark blue and dark green team
 surfaces. Existing game state and local history are unchanged by the visual theme.
