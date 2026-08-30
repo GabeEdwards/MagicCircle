@@ -136,6 +136,16 @@
     return sortedMembers([...results.keys()]).map((player) => results.get(player));
   }
 
+  function defaultWinner(lifeTotals) {
+    if (lifeTotals.a > lifeTotals.b) return 'a';
+    if (lifeTotals.b > lifeTotals.a) return 'b';
+    return '';
+  }
+
+  function resetState() {
+    return emptyState();
+  }
+
   function sortPlayerResults(results, field = 'playerName', direction = 'asc') {
     const multiplier = direction === 'desc' ? -1 : 1;
     return [...results].sort((left, right) => typeof left[field] === 'string' ? multiplier * left[field].localeCompare(right[field]) : multiplier * (left[field] - right[field]));
@@ -203,7 +213,7 @@
     return `${time}: Game started (${details.firstPlayerSelectionMethod})`;
   }
 
-  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, AUDIT_EVENTS, validateTeams, sortedMembers, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, undoTurn, createCompletedGame, playerResults, sortPlayerResults, initializeTimers, pauseTimer, resumeTimer, timerElapsed, formatElapsedTime, recordAuditEvent, generateCSV, getPreference, setPreference, validateGameState, emptyState, isValidState, readState, writeState };
+  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, AUDIT_EVENTS, validateTeams, sortedMembers, defaultWinner, resetState, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, undoTurn, createCompletedGame, playerResults, sortPlayerResults, initializeTimers, pauseTimer, resumeTimer, timerElapsed, formatElapsedTime, recordAuditEvent, generateCSV, getPreference, setPreference, validateGameState, emptyState, isValidState, readState, writeState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.MTGTracker = api;
   if (typeof document === 'undefined') return;
@@ -220,7 +230,7 @@
   function renderEndGame() { const game = state.activeGame; if (!game) return; elements.winnerOptions.replaceChildren(...game.teams.map((team) => { const label = document.createElement('label'); label.className = `winner-option${selectedWinner === team.id ? ' selected' : ''}`; label.innerHTML = `<input type="radio" name="winner" value="${team.id}" ${selectedWinner === team.id ? 'checked' : ''}><span>${TEAM_NAMES[team.id]} · ${game.lifeTotals[team.id]} life</span>`; return label; })); elements.confirmEnd.disabled = !selectedWinner; }
   function render() { Object.entries(views).forEach(([name, view]) => { view.hidden = name !== mode; }); elements.modeLabel.textContent = mode === 'between' ? 'Between games' : mode === 'setup' ? 'Team setup' : mode === 'end' ? 'Declare a winner' : 'In game'; if (mode === 'between') renderHistory(); else if (mode === 'setup') renderSetup(); else if (mode === 'game') renderGame(); else renderEndGame(); }
   document.addEventListener('change', (event) => { if (event.target.matches('.player-choice input')) { const team = setupTeams.find((entry) => entry.id === event.target.dataset.team); team.members = event.target.checked ? [...team.members, event.target.dataset.player] : team.members.filter((player) => player !== event.target.dataset.player); renderSetup(); } if (event.target.matches('input[name="winner"]')) { selectedWinner = event.target.value; renderEndGame(); } });
-  document.addEventListener('click', (event) => { const action = event.target.dataset.action; if (event.target.id === 'new-game-button' || event.target.id === 'abandon-game-button') { if (state.activeGame && !window.confirm('Abandon the active game and start a new one?')) return; setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; setMode('setup'); return; } if (event.target.id === 'cancel-setup-button') { setMode('between'); return; } if (event.target.id === 'confirm-setup-button') { try { state.activeGame = createActiveGame(setupTeams); persist(); setMode('game'); } catch (error) { elements.setupErrors.textContent = error.message; elements.setupErrors.hidden = false; } return; } if (action === 'life') { state.activeGame = adjustLife(state.activeGame, event.target.dataset.team, Number(event.target.dataset.delta)); persist(); renderGame(); return; } if (event.target.id === 'advance-turn-button') { state.activeGame = advanceTurn(state.activeGame); persist(); renderGame(); return; } if (event.target.id === 'end-game-button') { selectedWinner = ''; setMode('end'); return; } if (event.target.id === 'cancel-end-button') { selectedWinner = ''; setMode('game'); return; } if (event.target.id === 'confirm-end-button' && selectedWinner) { state.completedGames = [createCompletedGame(state.activeGame, selectedWinner), ...state.completedGames]; state.activeGame = null; persist(); selectedWinner = ''; setMode('between'); } });
+  document.addEventListener('click', (event) => { const action = event.target.dataset.action; if (event.target.id === 'new-session-button') { const hasData = Boolean(state.activeGame || state.completedGames.length); const message = 'Start a new session? This will erase the active game, completed game history, and player results.'; if (hasData && !window.confirm(message)) return; state = resetState(); setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; selectedWinner = ''; persist(); showStatus(''); setMode('between'); return; } if (event.target.id === 'new-game-button' || event.target.id === 'abandon-game-button') { if (state.activeGame && !window.confirm('Abandon the active game and start a new one?')) return; setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; setMode('setup'); return; } if (event.target.id === 'cancel-setup-button') { setMode('between'); return; } if (event.target.id === 'confirm-setup-button') { try { state.activeGame = createActiveGame(setupTeams); persist(); if (state.activeGame.usedRandomFallback) showStatus('Secure randomness was unavailable. A browser fallback selected the first player; this choice may be less fair.'); else showStatus(''); setMode('game'); } catch (error) { elements.setupErrors.textContent = error.message; elements.setupErrors.hidden = false; } return; } if (action === 'life') { state.activeGame = adjustLife(state.activeGame, event.target.dataset.team, Number(event.target.dataset.delta)); persist(); renderGame(); return; } if (event.target.id === 'advance-turn-button') { state.activeGame = advanceTurn(state.activeGame); persist(); renderGame(); return; } if (event.target.id === 'end-game-button') { selectedWinner = defaultWinner(state.activeGame.lifeTotals); setMode('end'); return; } if (event.target.id === 'cancel-end-button') { selectedWinner = ''; setMode('game'); return; } if (event.target.id === 'confirm-end-button' && selectedWinner) { state.completedGames = [createCompletedGame(state.activeGame, selectedWinner), ...state.completedGames]; state.activeGame = null; persist(); selectedWinner = ''; setMode('between'); } });
 
   function renderEnhancedControls() {
     const game = state.activeGame;

@@ -19,6 +19,10 @@
 - [x] Team Blue and Team Green use distinct dark shades in setup, game, and history displays.
 - [x] Active-team emphasis remains visible over team shading and does not rely on color alone.
 - [x] Focused, disabled, selected, error, and forced-contrast states remain usable on dark surfaces.
+- [x] New session warns before erasing active game, history, and player results.
+- [x] Canceling New session preserves all existing data.
+- [x] Confirming New session clears active game, history, and player results.
+- [x] Higher-life winner is selected by default, ties remain unselected, and the user can override the default.
 
 ## Validation Notes
 

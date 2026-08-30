@@ -28,3 +28,10 @@ test('reports storage failures without stopping play', () => {
   assert.match(readState(failingStorage).warning, /could not be read/);
   assert.equal(writeState(emptyState(), failingStorage).ok, false);
 });
+
+test('reset state can overwrite only the app storage record', () => {
+  const fakeStorage = storage();
+  const reset = { activeGame: null, completedGames: [], schemaVersion: 1 };
+  assert.equal(writeState(reset, fakeStorage).ok, true);
+  assert.deepEqual(readState(fakeStorage).state, reset);
+});
