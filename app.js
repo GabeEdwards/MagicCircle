@@ -46,9 +46,20 @@
 
   function selectFirstTeam(teams, randomSource) {
     const [first, second] = teams;
-    if (first.members.length !== second.members.length) return { teamId: first.members.length < second.members.length ? first.id : second.id, usedFallback: false, method: 'team-size-fairness' };
-    const selected = chooseFirstTeam(randomSource);
-    return { ...selected, method: selected.usedFallback ? 'fallback-random' : 'random' };
+    let chosenTeamId;
+    let usedFallback = false;
+    let method;
+    if (first.members.length !== second.members.length) {
+      chosenTeamId = first.members.length < second.members.length ? first.id : second.id;
+      usedFallback = false;
+      method = 'team-size-fairness';
+    } else {
+      const selected = chooseFirstTeam(randomSource);
+      chosenTeamId = selected.teamId;
+      usedFallback = selected.usedFallback;
+      method = selected.usedFallback ? 'fallback-random' : 'random';
+    }
+    return { teamId: chosenTeamId, usedFallback, method };
   }
 
   function initializeTimers(activeTeamId, startedAt = nowMs()) {
@@ -89,7 +100,7 @@
   }
 
   function adjustLife(game, teamId, delta) {
-    if (!game || game.status !== 'active' || !['a', 'b'].includes(teamId) || ![1, -1, 5, -5].includes(delta)) return game;
+    if (!game || game.status !== 'active' || !['a', 'b'].includes(teamId) || ![1, -1, 3, -3, 5, -5].includes(delta)) return game;
     const oldValue = game.lifeTotals[teamId];
     return { ...game, lifeTotals: { ...game.lifeTotals, [teamId]: oldValue + delta }, auditLog: recordAuditEvent(game.auditLog, AUDIT_EVENTS.LIFE_ADJUSTED, { teamId, delta, oldValue, newValue: oldValue + delta }) };
   }
@@ -156,6 +167,68 @@
     return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}` : `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
   }
 
+  function parseTimeString(timeStr) {
+    if (typeof timeStr !== 'string') return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(':');
+    if (parts.length === 1) {
+      const sec = Number(parts[0]);
+      return (!isNaN(sec) && sec >= 0) ? Math.round(sec * 1000) : null;
+    }
+    if (parts.length === 2) {
+      const min = Number(parts[0]);
+      const sec = Number(parts[1]);
+      if (isNaN(min) || isNaN(sec) || min < 0 || sec < 0 || sec >= 60) return null;
+      return Math.round((min * 60 + sec) * 1000);
+    }
+    if (parts.length === 3) {
+      const hrs = Number(parts[0]);
+      const min = Number(parts[1]);
+      const sec = Number(parts[2]);
+      if (isNaN(hrs) || isNaN(min) || isNaN(sec) || hrs < 0 || min < 0 || sec < 0 || min >= 60 || sec >= 60) return null;
+      return Math.round((hrs * 3600 + min * 60 + sec) * 1000);
+    }
+    return null;
+  }
+
+  function editCompletedGame(game, updates) {
+    if (!game) throw new Error('Game is required for editing.');
+    const updated = clone(game);
+    if (updates.winnerTeamId !== undefined) {
+      if (!game.teams.some((t) => t.id === updates.winnerTeamId)) {
+        throw new Error(`Winner must be a valid team (${game.teams.map((t) => t.id).join(' or ')}).`);
+      }
+      updated.winnerTeamId = updates.winnerTeamId;
+    }
+    if (updates.finalLifeTotals !== undefined) {
+      if (!updates.finalLifeTotals || typeof updates.finalLifeTotals !== 'object') {
+        throw new Error('Final life totals must be an object.');
+      }
+      game.teams.forEach((t) => {
+        const val = Number(updates.finalLifeTotals[t.id]);
+        if (isNaN(val) || !Number.isInteger(val)) {
+          throw new Error(`Final life total for ${TEAM_NAMES[t.id] || t.id} must be an integer.`);
+        }
+        updated.finalLifeTotals[t.id] = val;
+      });
+    }
+    if (updates.teamTimers !== undefined) {
+      if (!updates.teamTimers || typeof updates.teamTimers !== 'object') {
+        throw new Error('Team timers must be an object.');
+      }
+      game.teams.forEach((t) => {
+        const val = Number(updates.teamTimers[t.id]);
+        if (isNaN(val) || val < 0) {
+          throw new Error(`Team timer for ${TEAM_NAMES[t.id] || t.id} must be a non-negative number.`);
+        }
+        updated.teamTimers = updated.teamTimers || {};
+        updated.teamTimers[t.id] = Math.round(val);
+      });
+    }
+    return updated;
+  }
+
   function csvCell(value) { return `"${String(value ?? '').replace(/"/g, '""')}"`; }
   function generateCSV(completedGames) {
     const header = ['Date', 'Team A Members', 'Team B Members', 'Winner', 'Final Turn', 'Team A Final Life', 'Team B Final Life', 'Team A Elapsed Time', 'Team B Elapsed Time'];
@@ -213,24 +286,434 @@
     return `${time}: Game started (${details.firstPlayerSelectionMethod})`;
   }
 
-  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, AUDIT_EVENTS, validateTeams, sortedMembers, defaultWinner, resetState, chooseFirstTeam, createActiveGame, adjustLife, advanceTurn, undoTurn, createCompletedGame, playerResults, sortPlayerResults, initializeTimers, pauseTimer, resumeTimer, timerElapsed, formatElapsedTime, recordAuditEvent, generateCSV, getPreference, setPreference, validateGameState, emptyState, isValidState, readState, writeState };
+  const api = { PLAYERS, TEAM_NAMES, TEAM_COLORS, AUDIT_EVENTS, validateTeams, sortedMembers, defaultWinner, resetState, chooseFirstTeam, selectFirstTeam, createActiveGame, adjustLife, advanceTurn, undoTurn, createCompletedGame, editCompletedGame, playerResults, sortPlayerResults, initializeTimers, pauseTimer, resumeTimer, timerElapsed, formatElapsedTime, parseTimeString, recordAuditEvent, generateCSV, getPreference, setPreference, validateGameState, emptyState, isValidState, readState, writeState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.MTGTracker = api;
   if (typeof document === 'undefined') return;
 
-  const elements = { modeLabel: document.querySelector('#mode-label'), status: document.querySelector('#status-message'), history: document.querySelector('#history-list'), playerResults: document.querySelector('#player-results'), setupErrors: document.querySelector('#setup-errors'), confirmSetup: document.querySelector('#confirm-setup-button'), gameTeams: document.querySelector('#game-teams'), turnNumber: document.querySelector('#turn-number'), activeTeamLabel: document.querySelector('#active-team-label'), firstPlayerMethod: document.querySelector('#first-player-method'), winnerOptions: document.querySelector('#winner-options'), confirmEnd: document.querySelector('#confirm-end-button'), undoTurn: document.querySelector('#undo-turn-button'), soundEnabled: document.querySelector('#sound-enabled'), sortResults: document.querySelector('#sort-results'), auditLogButton: document.querySelector('#audit-log-button'), auditLogPanel: document.querySelector('#audit-log-panel'), auditLogList: document.querySelector('#audit-log-list') };
-  const views = { between: document.querySelector('#between-games-view'), setup: document.querySelector('#setup-view'), game: document.querySelector('#in-game-view'), end: document.querySelector('#end-game-view') };
-  let stored = readState(); let state = stored.state; let mode = state.activeGame ? 'game' : 'between'; let setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; let selectedWinner = ''; let auditVisible = false;
+  const elements = {
+    modeLabel: document.querySelector('#mode-label'),
+    maximizeButton: document.querySelector('#maximize-button'),
+    status: document.querySelector('#status-message'),
+    history: document.querySelector('#history-list'),
+    playerResults: document.querySelector('#player-results'),
+    setupErrors: document.querySelector('#setup-errors'),
+    confirmSetup: document.querySelector('#confirm-setup-button'),
+    firstPlayerAnnouncement: document.querySelector('#first-player-announcement'),
+    firstPlayerReason: document.querySelector('#first-player-reason'),
+    backToSetupButton: document.querySelector('#back-to-setup-button'),
+    startGameFromStageButton: document.querySelector('#start-game-from-stage-button'),
+    gameTeams: document.querySelector('#game-teams'),
+    turnNumber: document.querySelector('#turn-number'),
+    activeTeamLabel: document.querySelector('#active-team-label'),
+    firstPlayerMethod: document.querySelector('#first-player-method'),
+    winnerOptions: document.querySelector('#winner-options'),
+    confirmEnd: document.querySelector('#confirm-end-button'),
+    undoTurn: document.querySelector('#undo-turn-button'),
+    soundEnabled: document.querySelector('#sound-enabled'),
+    sortResults: document.querySelector('#sort-results'),
+    auditLogButton: document.querySelector('#audit-log-button'),
+    auditLogPanel: document.querySelector('#audit-log-panel'),
+    auditLogList: document.querySelector('#audit-log-list'),
+    editGameView: document.querySelector('#edit-game-view'),
+    editGameErrors: document.querySelector('#edit-game-errors'),
+    editWinnerOptions: document.querySelector('#edit-winner-options'),
+    editLifeA: document.querySelector('#edit-life-a'),
+    editLifeB: document.querySelector('#edit-life-b'),
+    editTimeA: document.querySelector('#edit-time-a'),
+    editTimeB: document.querySelector('#edit-time-b'),
+    cancelEditGameButton: document.querySelector('#cancel-edit-game-button'),
+    saveEditGameButton: document.querySelector('#save-edit-game-button')
+  };
+  const views = {
+    between: document.querySelector('#between-games-view'),
+    setup: document.querySelector('#setup-view'),
+    firstPlayer: document.querySelector('#first-player-view'),
+    game: document.querySelector('#in-game-view'),
+    end: document.querySelector('#end-game-view'),
+    editGame: document.querySelector('#edit-game-view')
+  };
+  let stored = readState();
+  let state = stored.state;
+  let mode = state.activeGame ? 'game' : 'between';
+  let setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }];
+  let stagedFirstPlayer = null;
+  let selectedWinner = '';
+  let auditVisible = false;
+  let editingGameIndex = null;
+  let editingWinner = '';
   function showStatus(message) { elements.status.textContent = message; elements.status.hidden = !message; }
   function persist() { const result = writeState(state); if (!result.ok) showStatus(result.warning); }
   function setMode(nextMode) { mode = nextMode; render(); }
-  function renderSetup() { setupTeams.forEach((team) => { const container = document.querySelector(`#team-${team.id}-players`); document.querySelector(`#team-${team.id}-count`).textContent = `${team.members.length} / 2-4`; const opposingTeam = setupTeams.find((entry) => entry.id !== team.id); container.replaceChildren(...sortedMembers(PLAYERS).map((player) => { const wrapper = document.createElement('div'); wrapper.className = 'player-choice'; const input = document.createElement('input'); input.type = 'checkbox'; input.id = `team-${team.id}-${player}`; input.checked = team.members.includes(player); input.dataset.team = team.id; input.dataset.player = player; input.disabled = opposingTeam.members.includes(player); const label = document.createElement('label'); label.htmlFor = input.id; label.textContent = player; wrapper.append(input, label); return wrapper; })); }); const errors = validateTeams(setupTeams); elements.setupErrors.textContent = errors.join(' '); elements.setupErrors.hidden = !errors.length; elements.confirmSetup.disabled = Boolean(errors.length); }
-  function renderHistory() { if (!state.completedGames.length) { elements.history.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty-state', textContent: 'No completed games yet. Set up the first match when your teams are ready.' })); elements.playerResults.replaceChildren(Object.assign(document.createElement('p'), { className: 'player-results-empty', textContent: 'No player results yet.' })); return; } elements.history.replaceChildren(...state.completedGames.map((result, index) => { const card = document.createElement('article'); card.className = 'history-card'; const header = document.createElement('header'); header.innerHTML = `<h3>Game ${state.completedGames.length - index}</h3><span class="history-meta">Turn ${result.winningTurnNumber}</span>`; const teams = document.createElement('div'); teams.className = 'history-teams'; result.teams.forEach((team) => { const item = document.createElement('div'); item.className = `history-team${team.id === result.winnerTeamId ? ' winner' : ''}`; item.dataset.team = team.id; const elapsed = formatElapsedTime(result.teamTimers?.[team.id] || 0); item.innerHTML = `<strong>${TEAM_NAMES[team.id]}${team.id === result.winnerTeamId ? ' · Winner' : ''}</strong><span>${sortedMembers(team.members).join(', ')} · ${result.finalLifeTotals[team.id]} life · ${elapsed}</span>`; teams.append(item); }); card.append(header, teams); return card; })); const results = playerResults(state.completedGames); const table = document.createElement('table'); table.innerHTML = '<thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Losses</th><th>Win %</th></tr></thead>'; const body = document.createElement('tbody'); results.forEach((result) => { const row = document.createElement('tr'); [result.playerName, result.gamesPlayed, result.wins, result.losses, `${result.winPercentage.toFixed(1)}%`].forEach((value) => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); }); body.append(row); }); table.append(body); elements.playerResults.replaceChildren(table); }
-  function renderGame() { const game = state.activeGame; if (!game) return; elements.turnNumber.textContent = game.turnNumber; elements.activeTeamLabel.textContent = `${TEAM_NAMES[game.activeTeamId]} is active${game.activeTeamId === game.firstPlayerTeamId ? ' · first player' : ''}`; if (elements.firstPlayerMethod) elements.firstPlayerMethod.textContent = game.firstPlayerSelectionMethod === 'team-size-fairness' ? 'Fair start: smaller team' : ''; const orderedTeams = [...game.teams].sort((left, right) => (left.id === game.firstPlayerTeamId ? -1 : 1) - (right.id === game.firstPlayerTeamId ? -1 : 1)); elements.gameTeams.replaceChildren(...orderedTeams.map((team) => { const card = document.createElement('article'); card.className = 'game-team'; card.dataset.team = team.id; card.dataset.active = String(team.id === game.activeTeamId); const label = document.createElement('div'); label.className = 'team-label'; label.innerHTML = `<div><h3>${TEAM_NAMES[team.id]}</h3><span class="first-player">${team.id === game.firstPlayerTeamId ? 'First player' : ''}</span></div>`; const members = document.createElement('ul'); members.className = 'members'; sortedMembers(team.members).forEach((member) => { const item = document.createElement('li'); item.textContent = member; members.append(item); }); const life = document.createElement('div'); life.className = 'life-total'; life.textContent = game.lifeTotals[team.id]; const controls = document.createElement('div'); controls.className = 'life-controls'; [-5, -1, 1, 5].forEach((delta) => { const button = document.createElement('button'); button.className = 'life-button'; button.type = 'button'; button.dataset.action = 'life'; button.dataset.team = team.id; button.dataset.delta = delta; button.textContent = `${delta > 0 ? '+' : '-'}${Math.abs(delta)}`; controls.append(button); }); card.append(label, members, life, controls); return card; })); }
-  function renderEndGame() { const game = state.activeGame; if (!game) return; elements.winnerOptions.replaceChildren(...game.teams.map((team) => { const label = document.createElement('label'); label.className = `winner-option${selectedWinner === team.id ? ' selected' : ''}`; label.innerHTML = `<input type="radio" name="winner" value="${team.id}" ${selectedWinner === team.id ? 'checked' : ''}><span>${TEAM_NAMES[team.id]} · ${game.lifeTotals[team.id]} life</span>`; return label; })); elements.confirmEnd.disabled = !selectedWinner; }
-  function render() { Object.entries(views).forEach(([name, view]) => { view.hidden = name !== mode; }); elements.modeLabel.textContent = mode === 'between' ? 'Between games' : mode === 'setup' ? 'Team setup' : mode === 'end' ? 'Declare a winner' : 'In game'; if (mode === 'between') renderHistory(); else if (mode === 'setup') renderSetup(); else if (mode === 'game') renderGame(); else renderEndGame(); }
-  document.addEventListener('change', (event) => { if (event.target.matches('.player-choice input')) { const team = setupTeams.find((entry) => entry.id === event.target.dataset.team); team.members = event.target.checked ? [...team.members, event.target.dataset.player] : team.members.filter((player) => player !== event.target.dataset.player); renderSetup(); } if (event.target.matches('input[name="winner"]')) { selectedWinner = event.target.value; renderEndGame(); } });
-  document.addEventListener('click', (event) => { const action = event.target.dataset.action; if (event.target.id === 'new-session-button') { const hasData = Boolean(state.activeGame || state.completedGames.length); const message = 'Start a new session? This will erase the active game, completed game history, and player results.'; if (hasData && !window.confirm(message)) return; state = resetState(); setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; selectedWinner = ''; persist(); showStatus(''); setMode('between'); return; } if (event.target.id === 'new-game-button' || event.target.id === 'abandon-game-button') { if (state.activeGame && !window.confirm('Abandon the active game and start a new one?')) return; setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }]; setMode('setup'); return; } if (event.target.id === 'cancel-setup-button') { setMode('between'); return; } if (event.target.id === 'confirm-setup-button') { try { state.activeGame = createActiveGame(setupTeams); persist(); if (state.activeGame.usedRandomFallback) showStatus('Secure randomness was unavailable. A browser fallback selected the first player; this choice may be less fair.'); else showStatus(''); setMode('game'); } catch (error) { elements.setupErrors.textContent = error.message; elements.setupErrors.hidden = false; } return; } if (action === 'life') { state.activeGame = adjustLife(state.activeGame, event.target.dataset.team, Number(event.target.dataset.delta)); persist(); renderGame(); return; } if (event.target.id === 'advance-turn-button') { state.activeGame = advanceTurn(state.activeGame); persist(); renderGame(); return; } if (event.target.id === 'end-game-button') { selectedWinner = defaultWinner(state.activeGame.lifeTotals); setMode('end'); return; } if (event.target.id === 'cancel-end-button') { selectedWinner = ''; setMode('game'); return; } if (event.target.id === 'confirm-end-button' && selectedWinner) { state.completedGames = [createCompletedGame(state.activeGame, selectedWinner), ...state.completedGames]; state.activeGame = null; persist(); selectedWinner = ''; setMode('between'); } });
+  function renderSetup() {
+    setupTeams.forEach((team) => {
+      const container = document.querySelector(`#team-${team.id}-players`);
+      document.querySelector(`#team-${team.id}-count`).textContent = `${team.members.length} / 2-4`;
+      const opposingTeam = setupTeams.find((entry) => entry.id !== team.id);
+      container.replaceChildren(...sortedMembers(PLAYERS).map((player) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'player-choice';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = `team-${team.id}-${player}`;
+        input.checked = team.members.includes(player);
+        input.dataset.team = team.id;
+        input.dataset.player = player;
+        input.disabled = opposingTeam.members.includes(player);
+        const label = document.createElement('label');
+        label.htmlFor = input.id;
+        label.textContent = player;
+        wrapper.append(input, label);
+        return wrapper;
+      }));
+    });
+    const errors = validateTeams(setupTeams);
+    elements.setupErrors.textContent = errors.join(' ');
+    elements.setupErrors.hidden = !errors.length;
+    elements.confirmSetup.disabled = Boolean(errors.length);
+  }
+
+  function renderFirstPlayerStage() {
+    if (!stagedFirstPlayer) return;
+    const teamLabel = TEAM_NAMES[stagedFirstPlayer.teamId];
+    elements.firstPlayerAnnouncement.textContent = teamLabel;
+    elements.firstPlayerReason.textContent = stagedFirstPlayer.method === 'team-size-fairness'
+      ? 'Fair start: smaller team plays first'
+      : 'Random selection: equal team sizes';
+  }
+
+  function renderHistory() {
+    if (!state.completedGames.length) {
+      elements.history.replaceChildren(Object.assign(document.createElement('div'), { className: 'empty-state', textContent: 'No completed games yet. Set up the first match when your teams are ready.' }));
+      elements.playerResults.replaceChildren(Object.assign(document.createElement('p'), { className: 'player-results-empty', textContent: 'No player results yet.' }));
+      return;
+    }
+    elements.history.replaceChildren(...state.completedGames.map((result, index) => {
+      const card = document.createElement('article');
+      card.className = 'history-card';
+      const header = document.createElement('header');
+      header.innerHTML = `<div><h3>Game ${state.completedGames.length - index}</h3><span class="history-meta">Turn ${result.winningTurnNumber}</span></div>`;
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'button button-quiet button-edit-game';
+      editBtn.textContent = 'Edit result';
+      editBtn.dataset.action = 'edit-game';
+      editBtn.dataset.gameIndex = String(index);
+      header.append(editBtn);
+      const teams = document.createElement('div');
+      teams.className = 'history-teams';
+      result.teams.forEach((team) => {
+        const item = document.createElement('div');
+        item.className = `history-team${team.id === result.winnerTeamId ? ' winner' : ''}`;
+        item.dataset.team = team.id;
+        const elapsed = formatElapsedTime(result.teamTimers?.[team.id] || 0);
+        item.innerHTML = `<strong>${TEAM_NAMES[team.id]}${team.id === result.winnerTeamId ? ' · Winner' : ''}</strong><span>${sortedMembers(team.members).join(', ')} · ${result.finalLifeTotals[team.id]} life · ${elapsed}</span>`;
+        teams.append(item);
+      });
+      card.append(header, teams);
+      return card;
+    }));
+    const results = playerResults(state.completedGames);
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>Player</th><th>Games</th><th>Wins</th><th>Losses</th><th>Win %</th></tr></thead>';
+    const body = document.createElement('tbody');
+    results.forEach((result) => {
+      const row = document.createElement('tr');
+      [result.playerName, result.gamesPlayed, result.wins, result.losses, `${result.winPercentage.toFixed(1)}%`].forEach((value) => {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.append(cell);
+      });
+      body.append(row);
+    });
+    table.append(body);
+    elements.playerResults.replaceChildren(table);
+  }
+
+  function renderGame() {
+    const game = state.activeGame;
+    if (!game) return;
+    elements.turnNumber.textContent = game.turnNumber;
+    elements.activeTeamLabel.textContent = `${TEAM_NAMES[game.activeTeamId]} is active${game.activeTeamId === game.firstPlayerTeamId ? ' · first team' : ''}`;
+    if (elements.firstPlayerMethod) elements.firstPlayerMethod.textContent = game.firstPlayerSelectionMethod === 'team-size-fairness' ? 'Fair start: smaller team' : '';
+    const orderedTeams = [...game.teams].sort((left, right) => (left.id === game.firstPlayerTeamId ? -1 : 1) - (right.id === game.firstPlayerTeamId ? -1 : 1));
+    elements.gameTeams.replaceChildren(...orderedTeams.map((team) => {
+      const card = document.createElement('article');
+      card.className = 'game-team';
+      card.dataset.team = team.id;
+      card.dataset.active = String(team.id === game.activeTeamId);
+      const label = document.createElement('div');
+      label.className = 'team-label';
+      label.innerHTML = `<div><h3>${TEAM_NAMES[team.id]}</h3><span class="first-player">${team.id === game.firstPlayerTeamId ? 'First team' : ''}</span></div>`;
+      const members = document.createElement('ul');
+      members.className = 'members';
+      sortedMembers(team.members).forEach((member) => {
+        const item = document.createElement('li');
+        item.textContent = member;
+        members.append(item);
+      });
+      const life = document.createElement('div');
+      life.className = 'life-total';
+      life.textContent = game.lifeTotals[team.id];
+      const controls = document.createElement('div');
+      controls.className = 'life-controls';
+      [-5, -3, -1, 1, 3, 5].forEach((delta) => {
+        const button = document.createElement('button');
+        button.className = 'life-button';
+        button.type = 'button';
+        button.dataset.action = 'life';
+        button.dataset.team = team.id;
+        button.dataset.delta = delta;
+        button.textContent = `${delta > 0 ? '+' : '-'}${Math.abs(delta)}`;
+        controls.append(button);
+      });
+      card.append(label, members, life, controls);
+      return card;
+    }));
+  }
+
+  function renderEndGame() {
+    const game = state.activeGame;
+    if (!game) return;
+    elements.winnerOptions.replaceChildren(...game.teams.map((team) => {
+      const label = document.createElement('label');
+      label.className = `winner-option${selectedWinner === team.id ? ' selected' : ''}`;
+      label.innerHTML = `<input type="radio" name="winner" value="${team.id}" ${selectedWinner === team.id ? 'checked' : ''}><span>${TEAM_NAMES[team.id]} · ${game.lifeTotals[team.id]} life</span>`;
+      return label;
+    }));
+    elements.confirmEnd.disabled = !selectedWinner;
+  }
+
+  function renderEditGame() {
+    if (editingGameIndex === null || !state.completedGames[editingGameIndex]) return;
+    const game = state.completedGames[editingGameIndex];
+    elements.editGameErrors.hidden = true;
+    elements.editWinnerOptions.replaceChildren(...game.teams.map((team) => {
+      const label = document.createElement('label');
+      label.className = `winner-option${editingWinner === team.id ? ' selected' : ''}`;
+      label.innerHTML = `<input type="radio" name="edit-winner" value="${team.id}" ${editingWinner === team.id ? 'checked' : ''}><span>${TEAM_NAMES[team.id]}</span>`;
+      return label;
+    }));
+    elements.editLifeA.value = game.finalLifeTotals.a;
+    elements.editLifeB.value = game.finalLifeTotals.b;
+    elements.editTimeA.value = formatElapsedTime(game.teamTimers?.a || 0);
+    elements.editTimeB.value = formatElapsedTime(game.teamTimers?.b || 0);
+  }
+
+  function updateMaximizeButton() {
+    if (!elements.maximizeButton) return;
+    const isFullscreen = Boolean(document.fullscreenElement);
+    elements.maximizeButton.textContent = isFullscreen ? 'Restore' : 'Maximize';
+    elements.maximizeButton.setAttribute('aria-pressed', String(isFullscreen));
+    elements.maximizeButton.title = isFullscreen ? 'Restore window size' : 'Maximize to full screen';
+  }
+
+  function render() {
+    Object.entries(views).forEach(([name, view]) => {
+      if (view) view.hidden = name !== mode;
+    });
+    elements.modeLabel.textContent = mode === 'between' ? 'Between games' : mode === 'setup' ? 'Team setup' : mode === 'firstPlayer' ? 'First player' : mode === 'end' ? 'Declare a winner' : mode === 'editGame' ? 'Edit game result' : 'In game';
+    if (mode === 'between') renderHistory();
+    else if (mode === 'setup') renderSetup();
+    else if (mode === 'firstPlayer') renderFirstPlayerStage();
+    else if (mode === 'game') renderGame();
+    else if (mode === 'editGame') renderEditGame();
+    else renderEndGame();
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    updateMaximizeButton();
+  });
+
+  document.addEventListener('change', (event) => {
+    if (event.target.matches('.player-choice input')) {
+      const team = setupTeams.find((entry) => entry.id === event.target.dataset.team);
+      team.members = event.target.checked
+        ? [...team.members, event.target.dataset.player]
+        : team.members.filter((player) => player !== event.target.dataset.player);
+      renderSetup();
+    }
+    if (event.target.matches('input[name="winner"]')) {
+      selectedWinner = event.target.value;
+      renderEndGame();
+    }
+    if (event.target.matches('input[name="edit-winner"]')) {
+      editingWinner = event.target.value;
+      renderEditGame();
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const action = event.target.dataset.action;
+
+    if (event.target.id === 'maximize-button') {
+      if (!document.fullscreenEnabled) {
+        showStatus('Full screen is not supported by your browser.');
+        return;
+      }
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          showStatus('Could not enter full screen display.');
+        });
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+      return;
+    }
+
+    if (event.target.id === 'new-session-button') {
+      const hasData = Boolean(state.activeGame || state.completedGames.length);
+      const message = 'Start a new session? This will erase the active game, completed game history, and player results.';
+      if (hasData && !window.confirm(message)) return;
+      state = resetState();
+      setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }];
+      stagedFirstPlayer = null;
+      selectedWinner = '';
+      editingGameIndex = null;
+      persist();
+      showStatus('');
+      setMode('between');
+      return;
+    }
+
+    if (event.target.id === 'new-game-button' || event.target.id === 'abandon-game-button') {
+      if (state.activeGame && !window.confirm('Abandon the active game and start a new one?')) return;
+      setupTeams = [{ id: 'a', members: [] }, { id: 'b', members: [] }];
+      stagedFirstPlayer = null;
+      setMode('setup');
+      return;
+    }
+
+    if (event.target.id === 'cancel-setup-button') {
+      setMode('between');
+      return;
+    }
+
+    if (event.target.id === 'confirm-setup-button') {
+      try {
+        const errors = validateTeams(setupTeams);
+        if (errors.length) throw new Error(errors.join(' '));
+        stagedFirstPlayer = selectFirstTeam(setupTeams);
+        elements.setupErrors.hidden = true;
+        setMode('firstPlayer');
+      } catch (error) {
+        elements.setupErrors.textContent = error.message;
+        elements.setupErrors.hidden = false;
+      }
+      return;
+    }
+
+    if (event.target.id === 'back-to-setup-button') {
+      setMode('setup');
+      return;
+    }
+
+    if (event.target.id === 'start-game-from-stage-button') {
+      try {
+        state.activeGame = createActiveGame(setupTeams);
+        if (stagedFirstPlayer) {
+          state.activeGame.activeTeamId = stagedFirstPlayer.teamId;
+          state.activeGame.firstPlayerTeamId = stagedFirstPlayer.teamId;
+          state.activeGame.firstPlayerSelectionMethod = stagedFirstPlayer.method;
+          state.activeGame.usedRandomFallback = stagedFirstPlayer.usedFallback;
+          state.activeGame.timers = initializeTimers(stagedFirstPlayer.teamId);
+        }
+        persist();
+        if (state.activeGame.usedRandomFallback) {
+          showStatus('Secure randomness was unavailable. A browser fallback selected the first player; this choice may be less fair.');
+        } else {
+          showStatus('');
+        }
+        setMode('game');
+      } catch (error) {
+        showStatus(error.message);
+      }
+      return;
+    }
+
+    if (action === 'edit-game') {
+      editingGameIndex = Number(event.target.dataset.gameIndex);
+      const game = state.completedGames[editingGameIndex];
+      if (game) {
+        editingWinner = game.winnerTeamId;
+        setMode('editGame');
+      }
+      return;
+    }
+
+    if (event.target.id === 'cancel-edit-game-button') {
+      editingGameIndex = null;
+      setMode('between');
+      return;
+    }
+
+    if (event.target.id === 'save-edit-game-button') {
+      event.preventDefault();
+      if (editingGameIndex === null || !state.completedGames[editingGameIndex]) return;
+      const game = state.completedGames[editingGameIndex];
+      try {
+        const timeAMs = parseTimeString(elements.editTimeA.value);
+        const timeBMs = parseTimeString(elements.editTimeB.value);
+        if (timeAMs === null || timeBMs === null) {
+          throw new Error('Please enter valid times in MM:SS or HH:MM:SS format.');
+        }
+        const lifeA = Number(elements.editLifeA.value);
+        const lifeB = Number(elements.editLifeB.value);
+        if (isNaN(lifeA) || !Number.isInteger(lifeA) || isNaN(lifeB) || !Number.isInteger(lifeB)) {
+          throw new Error('Life totals must be valid integers.');
+        }
+        const updated = editCompletedGame(game, {
+          winnerTeamId: editingWinner,
+          finalLifeTotals: { a: lifeA, b: lifeB },
+          teamTimers: { a: timeAMs, b: timeBMs }
+        });
+        state.completedGames[editingGameIndex] = updated;
+        persist();
+        editingGameIndex = null;
+        showStatus('Game record updated successfully.');
+        setMode('between');
+      } catch (err) {
+        elements.editGameErrors.textContent = err.message;
+        elements.editGameErrors.hidden = false;
+      }
+      return;
+    }
+
+    if (action === 'life') {
+      state.activeGame = adjustLife(state.activeGame, event.target.dataset.team, Number(event.target.dataset.delta));
+      persist();
+      renderGame();
+      return;
+    }
+
+    if (event.target.id === 'advance-turn-button') {
+      state.activeGame = advanceTurn(state.activeGame);
+      persist();
+      renderGame();
+      return;
+    }
+
+    if (event.target.id === 'end-game-button') {
+      selectedWinner = defaultWinner(state.activeGame.lifeTotals);
+      setMode('end');
+      return;
+    }
+
+    if (event.target.id === 'cancel-end-button') {
+      selectedWinner = '';
+      setMode('game');
+      return;
+    }
+
+    if (event.target.id === 'confirm-end-button' && selectedWinner) {
+      state.completedGames = [createCompletedGame(state.activeGame, selectedWinner), ...state.completedGames];
+      state.activeGame = null;
+      persist();
+      selectedWinner = '';
+      setMode('between');
+      return;
+    }
+  });
 
   function renderEnhancedControls() {
     const game = state.activeGame;

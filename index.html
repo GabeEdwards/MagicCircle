@@ -12,7 +12,10 @@
   <main id="app" aria-live="polite">
     <header class="site-header">
       <div><p class="eyebrow">Magic: The Gathering</p><h1>Magic Circle</h1></div>
-      <p id="mode-label" class="mode-label">Between games</p>
+      <div class="header-actions">
+        <button id="maximize-button" class="button button-quiet" type="button" aria-pressed="false" title="Maximize to full screen">Maximize</button>
+        <p id="mode-label" class="mode-label">Between games</p>
+      </div>
     </header>
     <p id="status-message" class="status-message" role="status" hidden></p>
 
@@ -31,6 +34,19 @@
       <div class="action-row"><button id="confirm-setup-button" class="button button-primary" type="button">Start game</button></div>
     </section>
 
+    <section id="first-player-view" class="view" aria-labelledby="first-player-heading" hidden>
+      <div class="section-heading"><div><p class="eyebrow">Ready to play</p><h2 id="first-player-heading">Starting team picked</h2></div></div>
+      <div class="first-player-card">
+        <p class="eyebrow">Starting team</p>
+        <h3 id="first-player-announcement" class="first-player-announcement"></h3>
+        <p id="first-player-reason" class="first-player-reason"></p>
+      </div>
+      <div class="action-row">
+        <button id="back-to-setup-button" class="button button-quiet" type="button">Go back</button>
+        <button id="start-game-from-stage-button" class="button button-primary" type="button">Continue to game</button>
+      </div>
+    </section>
+
     <section id="in-game-view" class="view" aria-labelledby="game-heading" hidden>
       <div class="game-topbar"><div><p class="eyebrow">Live game</p><h2 id="game-heading">Turn <span id="turn-number">1</span></h2></div><div class="turn-status"><span class="status-dot" aria-hidden="true"></span><span id="active-team-label">Team Blue starts</span><span id="first-player-method" class="first-player-method"></span></div></div>
       <div id="game-teams" class="game-team-grid"></div>
@@ -39,6 +55,38 @@
     </section>
 
     <section id="end-game-view" class="view modal-view" aria-labelledby="end-game-heading" hidden><div class="modal-panel"><p class="eyebrow">Game result</p><h2 id="end-game-heading">Who won?</h2><p class="helper-text">Choose a winner to save this game to recent results.</p><div id="winner-options" class="winner-options"></div><div class="action-row"><button id="cancel-end-button" class="button button-quiet" type="button">Keep playing</button><button id="confirm-end-button" class="button button-primary" type="button" disabled>Save result</button></div></div></section>
+
+    <section id="edit-game-view" class="view modal-view" aria-labelledby="edit-game-heading" hidden>
+      <div class="modal-panel">
+        <p class="eyebrow">Edit game record</p>
+        <h2 id="edit-game-heading">Edit game result</h2>
+        <div id="edit-game-errors" class="inline-error" role="alert" hidden></div>
+        <form id="edit-game-form">
+          <fieldset class="edit-fieldset">
+            <legend>Winner</legend>
+            <div id="edit-winner-options" class="winner-options"></div>
+          </fieldset>
+          <fieldset class="edit-fieldset">
+            <legend>Final life totals</legend>
+            <div class="edit-fields-row">
+              <label for="edit-life-a">Team Blue life: <input id="edit-life-a" type="number" step="1" required></label>
+              <label for="edit-life-b">Team Green life: <input id="edit-life-b" type="number" step="1" required></label>
+            </div>
+          </fieldset>
+          <fieldset class="edit-fieldset">
+            <legend>Elapsed time totals</legend>
+            <div class="edit-fields-row">
+              <label for="edit-time-a">Team Blue time (MM:SS): <input id="edit-time-a" type="text" placeholder="MM:SS" required></label>
+              <label for="edit-time-b">Team Green time (MM:SS): <input id="edit-time-b" type="text" placeholder="MM:SS" required></label>
+            </div>
+          </fieldset>
+          <div class="action-row">
+            <button id="cancel-edit-game-button" class="button button-quiet" type="button">Cancel</button>
+            <button id="save-edit-game-button" class="button button-primary" type="button">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </section>
   </main>
   <script src="app.js" defer></script>
 </body>

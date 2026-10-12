@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateTeams, sortedMembers, playerResults, defaultWinner, resetState, createActiveGame, adjustLife, advanceTurn } = require('../app.js');
+const { validateTeams, sortedMembers, playerResults, defaultWinner, resetState, createActiveGame, adjustLife, advanceTurn, selectFirstTeam } = require('../app.js');
 
 const teams = [
   { id: 'a', members: ['Gabe', 'Phil'] },
@@ -38,6 +38,12 @@ test('sorts roster names and supports five-point life changes', () => {
   const game = createActiveGame(teams, null);
   assert.equal(adjustLife(game, 'a', 5).lifeTotals.a, 45);
   assert.equal(adjustLife(game, 'b', -5).lifeTotals.b, 35);
+  assert.equal(adjustLife(game, 'a', 3).lifeTotals.a, 43);
+  assert.equal(adjustLife(game, 'b', -3).lifeTotals.b, 37);
+  const adjusted = adjustLife(game, 'a', 3);
+  const lastEvent = adjusted.auditLog[adjusted.auditLog.length - 1];
+  assert.equal(lastEvent.eventType, 'LifeAdjusted');
+  assert.equal(lastEvent.details.delta, 3);
 });
 
 test('derives alphabetized player results from completed games', () => {
@@ -61,4 +67,43 @@ test('selects the higher-life team and leaves ties unselected', () => {
 
 test('creates a clean session without changing the envelope shape', () => {
   assert.deepEqual(resetState(), { activeGame: null, completedGames: [], schemaVersion: 1 });
+});
+
+test('first-player selection supports team-size fairness and random fallback', () => {
+  const unequalTeams = [
+    { id: 'a', members: ['Gabe', 'Phil'] },
+    { id: 'b', members: ['Tung', 'Siu', 'Chris'] }
+  ];
+  const fairResult = selectFirstTeam(unequalTeams, null);
+  assert.equal(fairResult.teamId, 'a');
+  assert.equal(fairResult.method, 'team-size-fairness');
+  assert.equal(fairResult.firstPlayerName, undefined);
+
+  const equalTeams = [
+    { id: 'a', members: ['Gabe', 'Phil'] },
+    { id: 'b', members: ['Tung', 'Siu'] }
+  ];
+  const randomResult = selectFirstTeam(equalTeams, null);
+  assert.ok(['a', 'b'].includes(randomResult.teamId));
+  assert.ok(['random', 'fallback-random'].includes(randomResult.method));
+  assert.equal(randomResult.firstPlayerName, undefined);
+});
+
+test('first-player stage announcement formats team name only without individual players', () => {
+  const { TEAM_NAMES } = require('../app.js');
+  const staged = selectFirstTeam([
+    { id: 'a', members: ['Gabe', 'Phil'] },
+    { id: 'b', members: ['Tung', 'Siu', 'Chris'] }
+  ]);
+  const announcementText = TEAM_NAMES[staged.teamId];
+  assert.equal(announcementText, 'Team Blue');
+  assert.doesNotMatch(announcementText, /Gabe|Phil|Tung|Siu|Chris/);
+});
+
+test('in-game turn labels and state indicators designate first team rather than first player', () => {
+  const { createActiveGame, TEAM_NAMES } = require('../app.js');
+  const game = createActiveGame(teams, null);
+  const activeLabelText = `${TEAM_NAMES[game.activeTeamId]} is active${game.activeTeamId === game.firstPlayerTeamId ? ' · first team' : ''}`;
+  assert.match(activeLabelText, /first team/);
+  assert.doesNotMatch(activeLabelText, /first player/i);
 });
